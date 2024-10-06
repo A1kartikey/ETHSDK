@@ -22,14 +22,8 @@ mongoose.connect(`mongodb://root:password@localhost:27017/mydatabase?authSource=
   console.error('Error connecting to MongoDB:', error);
 });
 
-// Define a Mongoose schema and model
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  age: { type: Number, required: true }
-});
 
-const User = mongoose.model('User', userSchema);
+
 
 
 // Define schema for the transaction
@@ -117,26 +111,11 @@ const blockData = {
 app.post('/saveblocks', async (req, res) => {
     try {
      console.log ("in api")
-   //   const tx =  await getTx.getTransactions() ;
+     const tx =  await getTx.getTransactions() ;
 
-      // if (tx){
-        
-      // console.log ("tx in app ", Object.keys(tx));
-
-      // }
-      
-    //   try { 
-    //   const blocks1 = new blocks({
-    //     block : 20863840,
-    //     tx: tx['tx'] 
-    //   });
-
-    //   await blocks1.save();
-    // } catch(error) {
-    //   console.log("error: ", error) ;
-    // }
+  
     try {
-      const block = new Block(blockData);
+      const block = new Block(tx);
       await block.save();
       // console.log('Block and transactions have been saved successfully.');
       res.status(201).send(block);
@@ -155,7 +134,7 @@ app.post('/saveblocks', async (req, res) => {
 app.get('/getblock', async (req, res) => {
   try {
 
-    await Block.findOne({ block: 20863939 })
+    await Block.findOne( {"block": req.body.block } )
       .then(x => {
         res.send(x);
       })
@@ -166,30 +145,6 @@ app.get('/getblock', async (req, res) => {
 });
 
 
-  // Simple route to create a new user
-app.post('/users', async (req, res) => {
-  try {
-    const user = new User(req.body);
-    await user.save();
-    res.status(201).send(user);
-  } catch (error) {
-    res.status(400).send(error);
-  }
-});
-
-// Simple route to create a new user
-app.get('/getuser', async (req, res) => {
-    try {
-
-        User.find()
-        .then(users => {
-          res.send(users);
-        })
-
-    } catch (error) {
-      res.status(400).send(error);
-    }
-  });
 
 // Start the server
 app.listen(port, () => {

@@ -11,7 +11,7 @@ async function getTransactions() {
     const transactions = [];
     const transaction1 = {} ;
 
-    for (let i = 20863840; i >= 20863839; i--) {
+    for (let i = 20163840; i >= 20163840; i--) {
     
         const block = await web3.eth.getBlock(i, true);
         
