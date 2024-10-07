@@ -4,37 +4,29 @@ const {Web3} = require('web3')
 const infuraUrl = 'https://mainnet.infura.io/v3/1465b695b091451b8a38ed8d43fae353';
 const web3 = new Web3(new Web3.providers.HttpProvider(infuraUrl));
 
-// Fetch transactions for the specified address
+
 async function getTransactions() {
     
-   // const startBlockNumber = await web3.eth.getBlockNumber();
-    const transactions = [];
-    const transaction1 = {} ;
+   
+   const data1 = [];
 
-    for (let i = 20163840; i >= 20163840; i--) {
+for (let i = 20163848; i <= 20163850; i++) {
+    console.log("print", i);
+    const block = await web3.eth.getBlock(i, true);
+
+    const transaction1 = {
+        block: i,
+        tx: block.transactions
+    };
     
-        const block = await web3.eth.getBlock(i, true);
-        
-        if (block && block.transactions) {
-            
-            block.transactions.forEach(tx => {
+    data1.push(transaction1); 
+    console.log(transaction1);
+}
 
-
-                    transactions.push(  tx  );
-
-                    
-                }
-            
-       )}
-
-      
-
-       transaction1["block"] =   i ;
-       transaction1["tx"] =   transactions ;
-
-    }
-
-    return transaction1;
+console.log(data1);  
+return data1;
+    // console.log(data1)
+    
 }
 
 
