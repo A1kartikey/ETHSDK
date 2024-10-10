@@ -1,12 +1,10 @@
 const Web3 = require('web3').default;
 const mongoose = require('mongoose');
 
-// MongoDB connection details
 const MONGO_URI = 'mongodb://root:password@localhost:27017/mydatabase?authSource=admin';
 const infuraUrl = 'https://mainnet.infura.io/v3/1465b695b091451b8a38ed8d43fae353';
 const web3 = new Web3(new Web3.providers.HttpProvider(infuraUrl));
 
-// Connect to MongoDB
 const connectToMongoDB = async () => {
     try {
         await mongoose.connect(MONGO_URI, {
@@ -19,6 +17,17 @@ const connectToMongoDB = async () => {
         process.exit(1);
     }
 };
+
+const logsSchema = new mongoose.Schema({
+    block: { type: Number, required: true, unique: true },
+    logs: [{
+        address: { type: String },
+        data: { type: String },
+        topics: { type: [String], required: true },
+        transactionHash: { type: String },
+    }],
+});
+const Log = mongoose.model('Log', logsSchema);
 
 // Define transaction schema
 const transactionSchema = new mongoose.Schema({
@@ -41,7 +50,7 @@ const transactionSchema = new mongoose.Schema({
     type: { type: mongoose.Schema.Types.Mixed },
     v: { type: mongoose.Schema.Types.Mixed },
     value: { type: mongoose.Schema.Types.Mixed },
-    transactionType: { type: String }, // New field for transaction type
+    
 });
 
 // Define block schema
@@ -59,7 +68,7 @@ const blockSchema = new mongoose.Schema({
     number: { type: String },
     gasLimit: { type: String },
     gasUsed: { type: String },
-    timestamp: { type: String },
+    timestamp: { type: Date, required: true },
     totalDifficulty: { type: String },
     extraData: { type: String },
     mixHash: { type: String },
@@ -69,43 +78,52 @@ const blockSchema = new mongoose.Schema({
     tx: [transactionSchema],
 });
 
-// Create the Block model
 const Block = mongoose.model('Block', blockSchema);
 
-// Function to detect transaction type
-const getTransactionType = (input) => {
-    const erc20Signature = '0xa9059cbb'; // ERC-20 transfer(address,uint256)
-    const erc721Signature = '0x42842e0e'; // ERC-721 safeTransferFrom(address,address,uint256)
-    const erc1155Signature = '0xf242432a'; // ERC-1155 safeTransferFrom(address,address,uint256,uint256,bytes)
-    const erc777TransferSignature = '0xa9059cbb'; // ERC-777 transfer(address,uint256) - same as ERC-20
-    const erc777SendSignature = '0x23b872dd'; // ERC-777 transferFrom(address,address,uint256)
-    const erc4626DepositSignature = '0xd0e30db0'; // ERC-4626 deposit(uint256)
-    const erc2981RoyaltyInfoSignature = '0x2a55205a'; // ERC-2981 royaltyInfo(uint256,uint256)
-    const erc998SafeTransferSignature = '0xf242432a'; // ERC-998 safeTransferFrom(address,address,uint256,uint256,bytes)
+// Define event signatures for ERC standards
 
-    if (input.startsWith(erc20Signature) ) {
-        return "ERC-20";
+
+// Function to get transaction type based on input
+const parseLogData = (data) => {
+    if (data === '0x' || !data) {
+        return '0'; // Return zero or any other placeholder for empty or non-numeric data
     }
-    if (input.startsWith(erc777TransferSignature) || input.startsWith(erc777SendSignature)) {
-      return "ERC-777";
-  }
-    if (input.startsWith(erc721Signature)) return "ERC-721";
-    if (input.startsWith(erc1155Signature)) return "ERC-1155";
-    if (input.startsWith(erc4626DepositSignature)) return "ERC-4626";
-    if (input.startsWith(erc2981RoyaltyInfoSignature)) return "ERC-2981";
-    if (input.startsWith(erc998SafeTransferSignature)) return "ERC-998";
     
-    return "Unknown/Other";
-};
+    try {
+        return web3.utils.hexToNumberString(data);
+    } catch (error) {
+        console.error('Error converting data to number string:', error);
+        return data; // Return raw data if conversion fails
+    }
+  };
 
-// Function to handle new block headers
+// Function to decode log topics and extract event type
+
+
 const handleNewBlockHeader = async (blockHeader) => {
     console.log(`New Block Number: ${blockHeader.number}`);
     const blockNumber = blockHeader.number;
 
     try {
         const block = await web3.eth.getBlock(blockNumber, true);
-        
+
+        // Fetch logs for the block
+        const result = await web3.eth.getPastLogs({
+            fromBlock: blockNumber,
+            toBlock: blockNumber,
+        });
+
+        const logsData = {
+            block: blockNumber,
+            logs: result.map(log => ({
+                address: log.address,
+                data: parseLogData(log.data),
+                topics: log.topics,
+                transactionHash: log.transactionHash,
+                
+            })),
+        };
+
         const transactionData = {
             block: blockNumber,
             hash: block.hash,
@@ -120,7 +138,7 @@ const handleNewBlockHeader = async (blockHeader) => {
             number: block.number,
             gasLimit: block.gasLimit,
             gasUsed: block.gasUsed,
-            timestamp: block.timestamp,
+            timestamp: new Date(Number(BigInt(block.timestamp)) * 1000),
             totalDifficulty: block.totalDifficulty,
             extraData: block.extraData,
             mixHash: block.mixHash,
@@ -129,24 +147,27 @@ const handleNewBlockHeader = async (blockHeader) => {
             size: block.size,
             tx: block.transactions.map(tx => ({
                 ...tx,
-                transactionType: getTransactionType(tx.input), // Add transaction type
+               
             })),
         };
 
         const data = new Block(transactionData);
         await data.save();
         console.log("Data saved successfully for block:", blockNumber);
+
+        const log = new Log(logsData);
+        await log.save();
+        console.log("Log data saved successfully for block:", blockNumber);
     } catch (error) {
         console.error('Error processing block:', error);
     }
 };
 
-// Function to sync starting from a specific block
 const syncFromBlock = async (startBlock) => {
-    let currentBlock = 16811170;
-
+    let currentBlock = 11297933;
     try {
         const latestBlock = await web3.eth.getBlockNumber();
+        
         while (currentBlock <= latestBlock) {
             console.log(`Syncing Block Number: ${currentBlock}`);
             await handleNewBlockHeader({ number: currentBlock });
@@ -163,15 +184,11 @@ const main = async () => {
     await connectToMongoDB();
 
     const latestBlock = await Block.findOne().sort({ block: -1 });
-      
-
-    if (!latestBlock) {
-        return res.status(404).json({ message: 'No blocks found in the database' });
-    }
-     var startBlock = latestBlock.block + 1;  
-     console.log("startBlock", startBlock)
-    // Start syncing from the specified block
-   await syncFromBlock(startBlock);
+    const startBlock = latestBlock ? latestBlock.block + 1 : 0;
+    
+    console.log("Starting sync from block", startBlock);
+    await syncFromBlock(startBlock);
+    console.log("Task completed");
 };
 
 // Run the main function
