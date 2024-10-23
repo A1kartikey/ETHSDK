@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-
+// "method":"eth_getBlockReceipts",
 
 const app = express();
 const port = 3000;
@@ -23,7 +23,39 @@ mongoose.connect(`mongodb://root:password@localhost:27017/mydatabase?authSource=
 });
 
 
+const receipt = new mongoose.Schema({
+  blockNumber: { type: mongoose.Schema.Types.Mixed },
+  status: { type: String },
+  from: { type: String },
+  to: { type: String },
+  transactionHash: { type: mongoose.Schema.Types.Mixed }
+  
+});
+// Define schema for block receipts
+const blockReceiptSchema = new mongoose.Schema({
+blockNumber: { type: Number, required: true, unique: true },
+receipts: [receipt]
+});
 
+// Create a model based on the schema
+const BlockReceipt = mongoose.model('BlockReceipt', blockReceiptSchema);
+
+app.get('/block-receipts/:blockNumber', async (req, res) => {
+  const blockNumber = parseInt(req.params.blockNumber);
+
+  try {
+    const blockReceipt = await BlockReceipt.findOne({ blockNumber });
+    
+    if (!blockReceipt) {
+      return res.status(404).json({ message: `No receipts found for block number ${blockNumber}` });
+    }
+
+    res.json(blockReceipt);
+  } catch (error) {
+    console.error('Error fetching block receipts:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 
 // Define schema for the transaction
@@ -82,28 +114,6 @@ app.get('/getblock', async (req, res) => {
   }
 });
 
-// filter by hash
-app.get('/tx_hash', async (req, res) => {
-  const { hash } = req.query;
-
-  if (!hash) {
-      return res.status(400).json({ error: 'Transaction hash is required.' });
-  }
-
-  try {
-      const blockWithTransaction = await Block.findOne({ 'tx.hash': hash }, { 'tx.$': 1 });
-
-      if (!blockWithTransaction) {
-          return res.status(404).json({ message: 'Transaction not found.' });
-      }
-
-      const transaction = blockWithTransaction.tx[0];
-      res.json(transaction);
-  } catch (error) {
-      console.error('Error fetching transaction:', error);
-      res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 //filter tx by address
 
@@ -269,46 +279,6 @@ app.get('/tx_byaddress', async (req, res) => {
       res.status(500).json({ error: 'Internal Server Error' });
   }
 });
-
-// app.get('/logs_by_address', async (req, res) => {
-//   const { address } = req.query;
-
-//   if (!address) {
-//       return res.status(400).json({ error: 'Address is required.' });
-//   }
-
-//   try {
-//       // Find logs matching the given address
-//     const logs = await Log.find({
-//   'logs': {
-//     $elemMatch: {
-//       'topics': { $in: ['<topic_value>'] } // Replace '<topic_value>' with the specific topic you're searching for
-//     }
-//   }
-// });
-
-      
-//       // Check if logs are found
-//       if (logs.length === 0) {
-//           return res.status(404).json({ message: 'No logs found for this address.' });
-//       }
-
-//       // Extract logs from the found documents
-//       const logEntries = logs.flatMap(log => 
-//           log.logs.filter(logEntry => logEntry.address.toLowerCase() === address.toLowerCase())
-//       );
-
-//       res.json({
-//           address: address,
-//           logs: logEntries,
-//       });
-//   } catch (error) {
-//       console.error('Error fetching logs:', error);
-//       res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// });
-
-
 
 const logsSchema = new mongoose.Schema({
   block: { type: Number, required: true, unique: true },
